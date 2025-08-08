@@ -1,74 +1,80 @@
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import String, Boolean, ForeignKey
+from sqlalchemy import String, Enum, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 db = SQLAlchemy()
 
 class User(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(120), nullable=False)
+    firstname: Mapped[str] = mapped_column(String(120), nullable=True)
+    lastname: Mapped[str] = mapped_column(String(120), nullable=True)
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    password: Mapped[str] = mapped_column(nullable=False)
-    is_active: Mapped[bool] = mapped_column(Boolean(), nullable=False)
-    favorites: Mapped[list["Favs"]] = relationship(back_populates="user")
-             #para que se vean todos los favs en una lista
-                                    #relationtship indica con quién va a tener relación esta tabla
 
+    #-------------------RELACIONES-------------------------------------------
+    posts: Mapped[list["Post"]] = relationship(back_populates="user")
+    comments: Mapped[list["Comment"]] = relationship(back_populates="author")
+    followers: Mapped[list["Follower"]] = relationship(
+        back_populates="followed",
+        foreign_keys="Follower.user_to_id"
+    )
+    following: Mapped[list["Follower"]] = relationship(
+        back_populates="follower",
+        foreign_keys="Follower.user_from_id"
+    )
 
     def serialize(self):
         return {
             "id": self.id,
-            "email": self.email,
-            # do not serialize the password, its a security breach
+            "username": self.username,
+            "firstname": self.firstname,
+            "lastname": self.lastname,
+            "email": self.email
         }
 
-class Character(db.Model):
+
+class Follower(db.Model):
+    user_from_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
+    user_to_id: Mapped[int] = mapped_column(ForeignKey("user.id"), primary_key=True)
+
+    #-------------------RELACIONES-------------------------------------------
+    follower: Mapped["User"] = relationship(
+        back_populates="following",
+        foreign_keys=[user_from_id]
+    )
+    followed: Mapped["User"] = relationship(
+        back_populates="followers",
+        foreign_keys=[user_to_id]
+    )
+
+
+class Post(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    eyes: Mapped[str] = mapped_column(nullable=False)
-    origin: Mapped[str] = mapped_column(nullable=False)
-    favorites: Mapped[list["Favs"]] = relationship(back_populates="character")
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
 
-    def serialize(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "eyes": self.eyes,
-            "origin": self.origin,
-        }
+    #-------------------RELACIONES-------------------------------------------
+    user: Mapped["User"] = relationship(back_populates="posts")
+    comments: Mapped[list["Comment"]] = relationship(back_populates="post")
+    media_items: Mapped[list["Media"]] = relationship(back_populates="post")
 
-class Planet(db.Model):
+
+class Comment(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    population: Mapped[str] = mapped_column(nullable=False)
-    surface: Mapped[str] = mapped_column(nullable=False)
-    favorites: Mapped[list["Favs"]] = relationship(back_populates="planet")
+    comment_text: Mapped[str] = mapped_column(String, nullable=False)
+    author_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
+    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
+
+    #-------------------RELACIONES-------------------------------------------
+    author: Mapped["User"] = relationship(back_populates="comments")
+    post: Mapped["Post"] = relationship(back_populates="comments")
 
 
-    def serialize(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "population": self.population,
-            "surface": self.surface,
-        }
+class Media(db.Model):
     
-class Favs(db.Model):
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
-    user_id: Mapped[int] = mapped_column(ForeignKey("user.id"))
-                            #almacena la info del user_id en una columna
-    character_id: Mapped[int] = mapped_column(ForeignKey("character.id"))
-    planet_id: Mapped[int] = mapped_column(ForeignKey("planet.id"))
+    type: Mapped[str] = mapped_column(Enum("image", "video", name="media_type"), nullable=False)
+    url: Mapped[str] = mapped_column(String, nullable=False)
+    post_id: Mapped[int] = mapped_column(ForeignKey("post.id"), nullable=False)
 
-    user: Mapped["User"] = relationship(back_populates="favorites")
-                            #establece la relación con la tabla User
-    character: Mapped["Character"] = relationship(back_populates="favorites")
-    planet: Mapped["Planet"] = relationship(back_populates="favorites")
-    
-    
-
-    def serialize(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-       }
+    #-------------------RELACIONES-------------------------------------------
+    post: Mapped["Post"] = relationship(back_populates="media_items")
